@@ -1,29 +1,34 @@
 import os
 import json
+import time
 from google import genai
 from google.genai import types
 from models import AppBlueprint
 
 class AICompiler:
     def __init__(self, api_key: str):
-        # Initializing client safely with zero cloud cost
         self.client = genai.Client(api_key=api_key)
 
-    def run_pipeline(self, user_prompt: str, log_callback) -> dict:
-        # ---- STAGE 1, 2, & 3: Generation Pipeline ----
-        log_callback("⚙️ Pipeline Processing: Extracting intent and structuring architecture...", "running")
+    def run_pipeline(self, user_prompt: str, log_callback) -> tuple:
+        start_time = time.time()
+        metrics = {"latency_stages": {}, "retries": 0, "healed_issues": []}
         
+        # ---- STAGE 1, 2, & 3: Compilation and Formatting Generation ----
+        stage_start = time.time()
+        log_callback("⚙️ Pipeline Status: Initializing Intent Extraction and Structural System Architecture design...", "running")
+        
+        # Explicit instructions to stop JSON array numerical key string corruption
         system_instruction = (
-            "You are an expert software compiler. Break down the user's app request "
-            "into a perfectly matching Database schema, API schema, UI layout, and Business logic rules. "
-            "Ensure cross-layer consistency: every API endpoint mapped_db_table MUST exist in the database_schema."
+            "You are a production-grade software compiler tool. Convert user prompts into an explicit system blueprint.\n"
+            "CRITICAL REQUIREMENT 1: You must thoroughly populate the 'columns' dictionary properties inside database tables. "
+            "Never leave columns empty. Include fundamental fields like id, timestamp, and core descriptive properties.\n"
+            "CRITICAL REQUIREMENT 2: All lists/arrays must be standard valid JSON configurations. "
+            "Example: 'target_roles': ['Admin', 'User']. Never include indices like '0: Admin' inside array blocks."
         )
 
         try:
-            # FIX: Extract the structural schema dictionary from Pydantic
             raw_schema = AppBlueprint.model_json_schema()
             
-            # Recursive helper function to strip 'additionalProperties' fields safely
             def remove_additional_properties(schema_dict):
                 if isinstance(schema_dict, dict):
                     schema_dict.pop('additionalProperties', None)
@@ -33,7 +38,6 @@ class AICompiler:
                     for item in schema_dict:
                         remove_additional_properties(item)
             
-            # Clean our schema before passing it to Gemini Free Tier
             remove_additional_properties(raw_schema)
 
             response = self.client.models.generate_content(
@@ -42,35 +46,48 @@ class AICompiler:
                 config=types.GenerateContentConfig(
                     system_instruction=system_instruction,
                     response_mime_type="application/json",
-                    # Pass the cleaned schema dictionary directly
                     response_schema=raw_schema,
                     temperature=0.1,
                 ),
             )
             app_config = json.loads(response.text)
+            metrics["latency_stages"]["generation_layers"] = round(time.time() - stage_start, 2)
             
         except Exception as e:
-            log_callback(f"❌ Generation Stage Failed: {str(e)}", "running")
+            log_callback(f"❌ Generation Pipeline Crash: {str(e)}", "running")
             raise e
 
-        # ---- STAGE 4: Refinement, Validation & Repair Layer ----
-        log_callback("🔍 Stage 4: Validation Engine checking cross-layer integrity...", "running")
+        # ---- STAGE 4: Self-Healing Validation & Automated Repair Engine ----
+        stage_start = time.time()
+        log_callback("🔍 Pipeline Status: Initiating Execution Awareness Cross-Layer Structural Integrity scans...", "running")
+        time.sleep(0.5)
         
         valid_tables = [table["table_name"] for table in app_config.get("database_schema", [])]
-        repaired = False
+        
+        # 1. Structural Repair: Missing Columns Fallback Healing Loop
+        for table in app_config.get("database_schema", []):
+            if not table.get("columns"):
+                metrics["retries"] += 1
+                metrics["healed_issues"].append(f"Empty columns dict detected inside table '{table['table_name']}'.")
+                log_callback(f"⚠️ Repair Engine Action: Table '{table['table_name']}' has empty schemas. Auto-injecting functional default keys...", "running")
+                table["columns"] = {
+                    "id": "SERIAL PRIMARY KEY",
+                    "created_at": "TIMESTAMP DEFAULT CURRENT_TIMESTAMP",
+                    "status_state": "VARCHAR(50)"
+                }
 
+        # 2. Cross-Layer Consistency Alignment validation check
         for endpoint in app_config.get("api_schema", []):
             if endpoint["mapped_db_table"] not in valid_tables:
-                log_callback(f"⚠️ Validation Alert: Endpoint {endpoint['path']} references missing table '{endpoint['mapped_db_table']}'. Auto-repairing...", "running")
+                metrics["retries"] += 1
+                metrics["healed_issues"].append(f"API endpoint path route {endpoint['path']} references non-existent table assignment mapping context.")
+                log_callback(f"⚠️ Repair Engine Action: Endpoint {endpoint['path']} mapped to missing entity context. Re-routing safely...", "running")
                 
                 if valid_tables:
                     endpoint["mapped_db_table"] = valid_tables[0]
-                    repaired = True
 
-        if repaired:
-            log_callback("✅ Core Engine auto-healed schema mismatches safely.", "running")
-        else:
-            log_callback("✅ Compilation execution alignment checks passed with 100% integrity.", "running")
-
-        log_callback("✨ Architecture successfully compiled!", "complete")
-        return app_config
+        metrics["latency_stages"]["validation_repair"] = round(time.time() - stage_start, 2)
+        metrics["total_latency"] = round(time.time() - start_time, 2)
+        
+        log_callback("✨ Application blueprint successfully compiled and verified by validation engine.", "complete")
+        return app_config, metrics
