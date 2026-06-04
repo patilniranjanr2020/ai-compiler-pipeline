@@ -1,3 +1,4 @@
+import json
 import streamlit as st
 from compiler import AICompiler
 
@@ -56,7 +57,10 @@ with col2:
                 
                 with tab1:
                     st.markdown("### Validated Executable System Blueprint")
-                    st.json(compiled_blueprint)
+                    # Convert the Python dictionary into a guaranteed, clean, standard JSON string layout
+                    clean_json_string = json.dumps(compiled_blueprint, indent=2)
+                    # Render using the code block component to freeze presentation layouts and completely drop index strings
+                    st.code(clean_json_string, language="json")
                     
                 with tab2:
                     st.markdown("### System Analysis Metrics Evaluation")
