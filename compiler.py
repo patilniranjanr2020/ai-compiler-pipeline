@@ -20,13 +20,30 @@ class AICompiler:
         )
 
         try:
+            # FIX: Extract the structural schema dictionary from Pydantic
+            raw_schema = AppBlueprint.model_json_schema()
+            
+            # Recursive helper function to strip 'additionalProperties' fields safely
+            def remove_additional_properties(schema_dict):
+                if isinstance(schema_dict, dict):
+                    schema_dict.pop('additionalProperties', None)
+                    for key, value in schema_dict.items():
+                        remove_additional_properties(value)
+                elif isinstance(schema_dict, list):
+                    for item in schema_dict:
+                        remove_additional_properties(item)
+            
+            # Clean our schema before passing it to Gemini Free Tier
+            remove_additional_properties(raw_schema)
+
             response = self.client.models.generate_content(
                 model='gemini-2.5-flash',
                 contents=f"User Request: {user_prompt}",
                 config=types.GenerateContentConfig(
                     system_instruction=system_instruction,
                     response_mime_type="application/json",
-                    response_schema=AppBlueprint,
+                    # Pass the cleaned schema dictionary directly
+                    response_schema=raw_schema,
                     temperature=0.1,
                 ),
             )
